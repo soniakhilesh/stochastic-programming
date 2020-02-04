@@ -45,11 +45,22 @@ AllArcs = FHArcs + HCArcs
 
 ##### Start building the Model #####
 #create a model
-m=model("JLWRC")
+m=Model("JLWRC")
 
 #create variables
-i=m.addVars(AllArcs,obj=arcExpCost,name="increase") # increase on each arc
-x=m.addVars(AllArcs,Sset,name="flow") #flow on each arc
-z=m.addVars(Cset,Sset,name="demand") #flow on each arc
+i=m.addVars(AllArcs,obj=arcExpCost,name="increase",lb=0) # increase on each arc
+x=m.addVars(AllArcs,Sset,name="flow",lb=0) #flow on each arc
+z=m.addVars(Cset,Sset,obj=unmetCost*(1/len(Sset)),name="demand",lb=0) #unmet demand
 
 #add constraints
+# facility capacity constraints
+m.addConstrs((x.sum(i,'*',k)<=facCap[i] for i in Fset for k in Sset),"capacity")
+#flow balance constraints at hub
+m.addConstrs((x.sum('*',j,k)==x.sum(j,'*',k) for j in Hset for k in Sset),"balance")
+#fulfiling demandof each customer
+m.addConstrs((x.sum('*',j,k)+z[j,k]==demScens(j,k) for j in Cset for k in Sset),"demand")
+#arc capacity 
+m.addConstrs((x[i,j,k]<=curArcCap[i,j]+i[i,j]  for i,j in AllArcs for k in  Sset),"arc-cap")
+m.setObjective(GRB.MAXIMIZE)
+m.update()
+m.optimize()
