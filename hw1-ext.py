@@ -21,23 +21,35 @@ demScens = data.demScens  # demand scenarios (dictionary mapping (i,k) tuples to
 
 ### This is just a check of the data. You should probably comment out/delete these lines once you see the structure 
 
-print(Fset)
-print(Hset)
-print(Cset)
-print(Sset)
-print(arcExpCost)
-print(facCap)
-print(curArcCap)
-print(unmetCost)
-print(demScens)
-
+# =============================================================================
+# print(Fset)
+# print(Hset)
+# print(Cset)
+# print(Sset)
+# print(arcExpCost)
+# print(facCap)
+# print(curArcCap)
+# print(unmetCost)
+# print(demScens)
+# 
+# =============================================================================
 
 ### Define sets of arcs (used as keys to dictionaries)
 FHArcs = [(i,j) for i in Fset for j in Hset]  ## arcs from facilities to warehouses
 HCArcs = [(i,j) for i in Hset for j in Cset]   ## arcs from warehouses to customers
 AllArcs = FHArcs + HCArcs
-print(AllArcs)
+# =============================================================================
+# print(AllArcs)
+# =============================================================================
 
 
 ##### Start building the Model #####
+#create a model
+m=model("JLWRC")
 
+#create variables
+i=m.addVars(AllArcs,obj=arcExpCost,name="increase") # increase on each arc
+x=m.addVars(AllArcs,Sset,name="flow") #flow on each arc
+z=m.addVars(Cset,Sset,name="demand") #flow on each arc
+
+#add constraints
