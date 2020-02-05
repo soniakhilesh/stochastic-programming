@@ -1,7 +1,6 @@
 from gurobipy import *
-import numpy as np
 import matplotlib.pyplot as plt
-
+import time
 ### Read data from file you choose: commont/uncomment to choose the different files
 
 import hw1data1 as data
@@ -41,26 +40,117 @@ AllArcs = FHArcs + HCArcs
 # =============================================================================
 # print(AllArcs)
 # =============================================================================
+unmetCostscaled ={}
+for c in Cset:
+    for k in Sset:
+        unmetCostscaled[(c,k)]=unmetCost[c]/float(len(Sset))
 
 
 ##### Start building the Model #####
 #create a model
+start_time=time.time()
 m=Model("JLWRC")
 
 #create variables
-i=m.addVars(AllArcs,obj=arcExpCost,name="increase",lb=0) # increase on each arc
-x=m.addVars(AllArcs,Sset,name="flow",lb=0) #flow on each arc
-z=m.addVars(Cset,Sset,obj=unmetCost*(1/len(Sset)),name="demand",lb=0) #unmet demand
-
+#first stage
+increase=m.addVars(AllArcs,obj=arcExpCost,name="increase") # increase on each arc
+#second stage
+x=m.addVars(AllArcs,Sset,name="flow") #flow on each arc
+z=m.addVars(Cset,Sset,obj=unmetCostscaled, name="unmetdemand") #unmet demand
+m.modelSense = GRB.MINIMIZE
 #add constraints
 # facility capacity constraints
-m.addConstrs((x.sum(i,'*',k)<=facCap[i] for i in Fset for k in Sset),"capacity")
+m.addConstrs((x.sum(i,'*',k)<=facCap[i] for i in Fset for k in Sset),name="capacity")
 #flow balance constraints at hub
-m.addConstrs((x.sum('*',j,k)==x.sum(j,'*',k) for j in Hset for k in Sset),"balance")
+m.addConstrs((x.sum('*',j,k)==x.sum(j,'*',k) for j in Hset for k in Sset),name="balance")
 #fulfiling demandof each customer
-m.addConstrs((x.sum('*',j,k)+z[j,k]==demScens(j,k) for j in Cset for k in Sset),"demand")
+m.addConstrs((x.sum('*',j,k)+z[j,k]>=demScens[j,k] for j in Cset for k in Sset),name="demand")
 #arc capacity 
-m.addConstrs((x[i,j,k]<=curArcCap[i,j]+i[i,j]  for i,j in AllArcs for k in  Sset),"arc-cap")
-m.setObjective(GRB.MAXIMIZE)
+m.addConstrs((x[(*a),k]<=curArcCap[a]+increase[a]  for a in AllArcs for k in  Sset),name="arc-cap")
+#bjective
+m.update()
+# =============================================================================
+# m.write("file.lp")
+# =============================================================================
+m.optimize()
+stoch_sol = m.objVal
+print('Stochastic Solution Cost :{}'.format(stoch_sol))
+print('\nExpansion in arcs')
+for a in AllArcs:
+    if increase[a].x >0.0001:
+        print('Arc {}: {}'.format(a,increase[a].x))
+print('\nCost of increasing capacity : {}'.format(sum(increase[a].x*arcExpCost[a] for a in AllArcs)))
+print('\nDemand unmet (avg):') 
+for c in Cset:
+    unmet_avg = sum(z[c,k].x for k in Sset)/(len(Sset))
+    print('Customer {}: {}'.format(c, unmet_avg))
+print('\nExtensive model time:{}'.format(time.time() - start_time))
+
+#calculate cost in each scenario
+scenario_cost_stoch=[0]*len(Sset)
+scenario_num= 0
+for k in Sset:
+	scenario_cost_stoch[scenario_num] = sum(z[c,k].x*unmetCost[c] for c in Cset) + sum(increase[a].x*arcExpCost[a] for a in AllArcs)
+	scenario_num +=1
+
+#now define mean value model
+
+
+start_time_mean=time.time()
+mean_m=Model("mean-val")
+
+#create variables
+#first stage
+mv_increase=mean_m.addVars(AllArcs,obj=arcExpCost,name="increase") # increase on each arc
+#second stage
+mv_x=mean_m.addVars(AllArcs,name="flow") #flow on each arc
+mv_z=mean_m.addVars(Cset,obj=unmetCost, name="unmetdemand") #unmet demand
+mean_m.modelSense = GRB.MINIMIZE
+#add constraints
+# facility capacity constraints
+mean_m.addConstrs((mv_x.sum(i,'*')<=facCap[i] for i in Fset),name="capacity")
+#flow balance constraints at hub
+mean_m.addConstrs((mv_x.sum('*',j)==mv_x.sum(j,'*') for j in Hset),name="balance")
+#fulfiling demandof each customer
+mean_m.addConstrs((mv_x.sum('*',j)+mv_z[j]>=sum(demScens[j,k] for k in Sset)/len(Sset) for j in Cset),name="demand")
+#arc capacity 
+mean_m.addConstrs((mv_x[a]<=curArcCap[a]+mv_increase[a]  for a in AllArcs),name="arc-cap")
+#bjective
+mean_m.update()
+# =============================================================================
+# mean_m.write("file.lp")
+# =============================================================================
+#We now plus in mean value solution in stoch model
+
+mean_m.optimize()
+mean_val_sol = mean_m.objVal
+m.addConstrs(increase[a]==mv_increase[a].x for a in AllArcs)
 m.update()
 m.optimize()
+print('\nMean Value Solution\n')
+print('\nExpansion in arcs')
+for a in AllArcs:
+    if increase[a].x >0.0001:
+        print('Arc {}: {}'.format(a,increase[a].x))
+print('\nCost of increasing capacity in Mean Value Solution: {}'.format(sum(increase[a].x*arcExpCost[a] for a in AllArcs)))
+print('\nDemand unmet (avg) in Mean Value Solution:') 
+for c in Cset:
+    unmet_avg = sum(z[c,k].x for k in Sset)/(len(Sset))
+    print('Customer {}: {}'.format(c, unmet_avg))
+print('\n Cost of Mean Value Solution:{}'.format(m.objVal))
+print('VSS:{}'.format(m.objVal-stoch_sol))
+
+#cost in each scenario for mean value solution
+scenario_cost_mean = [0]*len(Sset)
+scenario_num = 0
+for k in Sset:
+	scenario_cost_mean[scenario_num] = sum(z[i,k].x*unmetCost[i] for i in Cset) + sum(increase[i,j].x*arcExpCost[i,j] for i,j in AllArcs)
+	scenario_num +=1
+
+#creating histogram
+plt.hist([scenario_cost_stoch,scenario_cost_mean], range=(0,18000), bins=18)
+plt.title('Stochastic vs Mean Value Solution')
+plt.xlabel('Cost')
+plt.ylabel('Number of Scenarios')
+plt.legend(['Stochastic Model solution','Mean value solution'])
+plt.savefig('hw1-hist.png')
