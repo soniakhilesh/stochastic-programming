@@ -5,6 +5,7 @@ import time
 
 import hw1data1 as data
 #import hw1data2 as data
+#MODULAR APPROACH
 class jeffrey_model:
     def __init__(self):
         self.Fset = data.Fset  # set of facilities (list of strings)
@@ -152,6 +153,7 @@ class jeffrey_model:
         plt.savefig('hw1-hist.png')
 
 #%%
+#NON MODULAR APPROACG
 Fset = data.Fset  # set of facilities (list of strings)
 Hset = data.Hset  # set of warehouses (list of strings)
 Cset = data.Cset  # set of customers (list of strings)
