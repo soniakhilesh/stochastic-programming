@@ -171,7 +171,6 @@ class jeffrey_model:
         demScens=self.demScens
         AllArcs=self.AllArcs
 
-
         start_time=time.time()
         #first stage vars
         self.increase=self.avar_m.addVars(AllArcs,name="increase") # increase on each arc
@@ -242,4 +241,10 @@ class jeffrey_model:
         plt.legend(['Lambda=0','Lambda=1','Lambda=100'])
         plt.savefig('hw1-hist.png')
 
-#%%
+#creating histogram
+plt.hist([scenario_cost_stoch,scenario_cost_mean], range=(0,18000), bins=18)
+plt.title('Stochastic vs Mean Value Solution')
+plt.xlabel('Cost')
+plt.ylabel('Number of Scenarios')
+plt.legend(['Stochastic Model solution','Mean value solution'])
+plt.savefig('hw1-hist.png')
